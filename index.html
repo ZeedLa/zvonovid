@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мой Видеочат на GitHub Pages</title>
+    <title>Видеозвонки 1 на 1</title>
     <style>
         body {
             font-family: sans-serif;
@@ -12,135 +12,211 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
-            margin: 0;
-        }
-        h1 { margin-bottom: 10px; }
-        .videos {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
             justify-content: center;
-            margin-bottom: 20px;
-        }
-        video {
-            width: 400px;
-            max-width: 45vw;
-            background: black;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        .controls {
-            background: #2a2a2a;
+            min-height: 100vh;
+            margin: 0;
             padding: 20px;
-            border-radius: 12px;
+            box-sizing: border-box;
+        }
+        .screen {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 16px;
             text-align: center;
             width: 100%;
             max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        input, button {
-            padding: 10px 15px;
-            margin: 5px;
-            border-radius: 6px;
+        .videos {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            background: #000;
+            border-radius: 12px;
+            border: 2px solid #444;
+        }
+        /* Подсказываем, что по видео собеседника можно кликнуть */
+        #remoteVideo { cursor: pointer; }
+        
+        input {
+            padding: 12px;
+            font-size: 18px;
+            text-align: center;
+            width: 80%;
+            margin-bottom: 15px;
+            border-radius: 8px;
             border: none;
-            font-size: 16px;
+            background: #444;
+            color: white;
         }
-        input { width: 200px; background: #444; color: white; }
-        button { background: #007bff; color: white; cursor: pointer; transition: 0.2s; }
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: none;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            margin: 5px;
+            transition: 0.2s;
+        }
         button:hover { background: #0056b3; }
-        #myId { font-weight: bold; color: #4caf50; font-size: 1.2em; }
-        .status { margin-top: 10px; font-style: italic; color: #aaa; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .status { margin-top: 15px; color: #aaa; font-style: italic; }
+        .hint { font-size: 12px; color: #888; margin-top: 5px; }
+        #callScreen { display: none; max-width: 900px; }
     </style>
 </head>
 <body>
 
-    <h1>Видеозвонки 1-на-1</h1>
-
-    <div class="videos">
-        <!-- Видео собеседника -->
-        <video id="remoteVideo" autoplay playsinline></video>
-        <!-- Твое видео -->
-        <video id="localVideo" autoplay playsinline muted></video>
+    <!-- Экран входа -->
+    <div id="setupScreen" class="screen">
+        <h2>Видеочат</h2>
+        <p id="setupStatus">Запрашиваем доступ к камере...</p>
+        <input type="text" id="roomCode" placeholder="Код комнаты (например, 123)" disabled>
+        <div>
+            <button id="createBtn" disabled>Создать комнату</button>
+            <button id="joinBtn" disabled>Войти</button>
+        </div>
+        <p class="hint">Придумайте короткий код и передайте его собеседнику</p>
     </div>
 
-    <div class="controls">
-        <p>Твой ID для звонка: <span id="myId">Загрузка...</span></p>
-        <p>Введи ID собеседника и нажми "Позвонить":</p>
-        <input type="text" id="remotePeerId" placeholder="ID собеседника">
-        <button id="callBtn">Позвонить</button>
-        <div class="status" id="status">Инициализация...</div>
+    <!-- Экран звонка -->
+    <div id="callScreen" class="screen">
+        <div class="videos">
+            <!-- Экран собеседника -->
+            <video id="remoteVideo" autoplay playsinline></video>
+            <!-- Твой экран (маленький) -->
+            <video id="localVideo" autoplay playsinline muted style="max-width: 150px; position: absolute; bottom: 20px; right: 20px; z-index: 10;"></video>
+        </div>
+        <h3 id="roomDisplay"></h3>
+        <p id="callStatus" class="status">Подключение...</p>
+        <button onclick="location.reload()">Завершить звонок</button>
+        <p class="hint">Если видео не появилось, кликните по черному экрану собеседника</p>
     </div>
 
-    <!-- Подключаем PeerJS из CDN -->
+    <!-- Библиотека PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    
+
     <script>
+        const setupScreen = document.getElementById('setupScreen');
+        const callScreen = document.getElementById('callScreen');
+        const setupStatus = document.getElementById('setupStatus');
+        const callStatus = document.getElementById('callStatus');
+        const roomCodeInput = document.getElementById('roomCode');
+        const createBtn = document.getElementById('createBtn');
+        const joinBtn = document.getElementById('joinBtn');
+        const roomDisplay = document.getElementById('roomDisplay');
+        
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
-        const myIdDisplay = document.getElementById('myId');
-        const callBtn = document.getElementById('callBtn');
-        const statusDisplay = document.getElementById('status');
-        
+
         let localStream;
         let peer;
+        let currentCall;
 
-        // 1. Запрашиваем доступ к камере и микрофону
+        // 1. Запрашиваем камеру при загрузке
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
                 localStream = stream;
                 localVideo.srcObject = stream;
+                localVideo.play();
                 
-                // 2. Инициализируем PeerJS (подключаемся к их бесплатному серверу)
-                peer = new Peer(); 
-
-                peer.on('open', id => {
-                    myIdDisplay.textContent = id;
-                    statusDisplay.textContent = 'Готов к звонкам!';
-                });
-
-                // 3. Обработка ВХОДЯЩЕГО звонка
-                peer.on('call', call => {
-                    statusDisplay.textContent = 'Входящий звонок... Принимаем!';
-                    call.answer(localStream); // Отвечаем, отдавая свое видео
-                    
-                    call.on('stream', remoteStream => {
-                        remoteVideo.srcObject = remoteStream;
-                        statusDisplay.textContent = 'На связи!';
-                    });
-                });
-
-                peer.on('error', err => {
-                    statusDisplay.textContent = 'Ошибка: ' + err.type;
-                    console.error(err);
-                });
-
+                // Включаем кнопки
+                roomCodeInput.disabled = false;
+                createBtn.disabled = false;
+                joinBtn.disabled = false;
+                setupStatus.textContent = 'Камера готова. Введите код:';
             })
             .catch(err => {
-                statusDisplay.textContent = 'Нет доступа к камере/микрофону!';
-                console.error('Ошибка медиа:', err);
+                setupStatus.textContent = '❌ Нет доступа к камере!';
+                console.error(err);
             });
 
-        // 4. Обработка ИСХОДЯЩЕГО звонка
-        callBtn.addEventListener('click', () => {
-            const remotePeerId = document.getElementById('remotePeerId').value.trim();
-            if (!remotePeerId) {
-                alert('Введи ID собеседника!');
-                return;
+        // Если браузер заблокировал видео, клик по нему запустит воспроизведение
+        remoteVideo.addEventListener('click', () => {
+            remoteVideo.play();
+            callStatus.textContent = 'На связи!';
+        });
+
+        // 2. Функция создания комнаты (Ты - хост)
+        createBtn.addEventListener('click', () => {
+            const code = roomCodeInput.value.trim();
+            if (!code) return alert('Введите код!');
+            
+            startCall(code, true);
+        });
+
+        // 3. Функция входа в комнату (Ты - гость)
+        joinBtn.addEventListener('click', () => {
+            const code = roomCodeInput.value.trim();
+            if (!code) return alert('Введите код!');
+            
+            startCall(code, false);
+        });
+
+        function startCall(code, isHost) {
+            setupScreen.style.display = 'none';
+            callScreen.style.display = 'block';
+            roomDisplay.textContent = 'Комната: ' + code;
+
+            // Если хост — создаем Peer с нашим кодом. Если гость — случайный.
+            const peerId = isHost ? 'my-chat-room-' + code : undefined;
+            peer = new Peer(peerId);
+
+            peer.on('open', id => {
+                if (isHost) {
+                    callStatus.textContent = 'Ждем собеседника... Скиньте ему код: ' + code;
+                } else {
+                    callStatus.textContent = 'Звоним в комнату ' + code + '...';
+                    // Гость звонит хосту
+                    currentCall = peer.call('my-chat-room-' + code, localStream);
+                    setupCall(currentCall);
+                }
+            });
+
+            // Хост ждет входящего звонка
+            if (isHost) {
+                peer.on('call', call => {
+                    currentCall = call;
+                    call.answer(localStream);
+                    setupCall(call);
+                });
             }
 
-            statusDisplay.textContent = 'Звоним...';
-            const call = peer.call(remotePeerId, localStream);
+            // Обработка ошибок
+            peer.on('error', err => {
+                if (err.type === 'unavailable-id') {
+                    alert('Эта комната уже занята! Придумайте другой код.');
+                    location.reload();
+                } else if (err.type === 'peer-unavailable') {
+                    alert('Комната не найдена. Проверьте код.');
+                    location.reload();
+                } else {
+                    callStatus.textContent = 'Ошибка сети: ' + err.type;
+                }
+            });
+        }
 
+        function setupCall(call) {
             call.on('stream', remoteStream => {
                 remoteVideo.srcObject = remoteStream;
-                statusDisplay.textContent = 'На связи!';
+                // Принудительно пытаемся запустить видео
+                remoteVideo.play().catch(e => {
+                    callStatus.textContent = 'Браузер заблокировал видео. Кликните по нему!';
+                });
+                callStatus.textContent = 'На связи!';
             });
 
             call.on('close', () => {
-                statusDisplay.textContent = 'Звонок завершен.';
-                remoteVideo.srcObject = null;
+                callStatus.textContent = 'Звонок завершен.';
             });
-        });
+        }
     </script>
 </body>
 </html>
