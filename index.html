@@ -3,219 +3,547 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Видеозвонки 1 на 1</title>
+    <title>Видеозвонки 1 на 1 — диагностика</title>
     <style>
-        body {
-            font-family: sans-serif;
-            background: #1a1a1a;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
+        * {
             box-sizing: border-box;
         }
-        .screen {
-            background: #2a2a2a;
-            padding: 30px;
-            border-radius: 16px;
-            text-align: center;
-            width: 100%;
-            max-width: 500px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .videos {
+
+        body {
+            font-family: sans-serif;
+            background: #111;
+            color: white;
+            margin: 0;
+            min-height: 100vh;
             display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
+            align-items: center;
             justify-content: center;
+            padding: 20px;
         }
-        video {
+
+        .screen {
             width: 100%;
-            max-width: 400px;
-            background: #000;
-            border-radius: 12px;
-            border: 2px solid #444;
+            max-width: 520px;
+            background: #1d1d1d;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
         }
-        /* Подсказываем, что по видео собеседника можно кликнуть */
-        #remoteVideo { cursor: pointer; }
-        
+
+        #callScreen {
+            display: none;
+            max-width: 900px;
+        }
+
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+
         input {
+            width: 100%;
             padding: 12px;
-            font-size: 18px;
-            text-align: center;
-            width: 80%;
-            margin-bottom: 15px;
-            border-radius: 8px;
+            border-radius: 10px;
             border: none;
-            background: #444;
+            background: #333;
             color: white;
-        }
-        button {
-            padding: 12px 20px;
             font-size: 16px;
-            border-radius: 8px;
-            border: none;
-            background: #007bff;
-            color: white;
-            cursor: pointer;
-            margin: 5px;
-            transition: 0.2s;
+            margin: 12px 0;
+            text-align: center;
         }
-        button:hover { background: #0056b3; }
-        button:disabled { background: #555; cursor: not-allowed; }
-        .status { margin-top: 15px; color: #aaa; font-style: italic; }
-        .hint { font-size: 12px; color: #888; margin-top: 5px; }
-        #callScreen { display: none; max-width: 900px; }
+
+        button {
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: none;
+            background: #0a84ff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 4px;
+        }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background: #333;
+        }
+
+        .status {
+            color: #ccc;
+            margin-top: 14px;
+            min-height: 24px;
+        }
+
+        .debug {
+            color: #9aa0a6;
+            font-size: 12px;
+            line-height: 1.4;
+            margin-top: 10px;
+            word-break: break-word;
+        }
+
+        .video-wrap {
+            position: relative;
+            width: 100%;
+            background: black;
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        #remoteVideo {
+            width: 100%;
+            min-height: 280px;
+            aspect-ratio: 16 / 9;
+            object-fit: contain;
+            background: black;
+            display: block;
+            cursor: pointer;
+        }
+
+        #localVideo {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            width: 130px;
+            max-width: 35%;
+            border-radius: 10px;
+            background: black;
+            z-index: 2;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .row button {
+            flex: 1;
+        }
+
+        .hint {
+            font-size: 13px;
+            color: #9aa0a6;
+            margin-top: 10px;
+        }
+
+        .warning {
+            color: #ffcc00;
+        }
     </style>
 </head>
 <body>
 
     <!-- Экран входа -->
     <div id="setupScreen" class="screen">
-        <h2>Видеочат</h2>
-        <p id="setupStatus">Запрашиваем доступ к камере...</p>
-        <input type="text" id="roomCode" placeholder="Код комнаты (например, 123)" disabled>
-        <div>
+        <h1>Видеочат</h1>
+
+        <p id="setupStatus">Запрашиваем доступ к камере и микрофону...</p>
+
+        <input
+            id="roomCode"
+            type="text"
+            placeholder="Короткий код комнаты, например 123"
+            disabled
+        >
+
+        <div class="row">
             <button id="createBtn" disabled>Создать комнату</button>
             <button id="joinBtn" disabled>Войти</button>
         </div>
-        <p class="hint">Придумайте короткий код и передайте его собеседнику</p>
+
+        <p class="hint">
+            Например: ты создаёшь комнату <b>123</b>, а собеседник вводит <b>123</b> и нажимает «Войти».
+        </p>
     </div>
 
     <!-- Экран звонка -->
     <div id="callScreen" class="screen">
-        <div class="videos">
-            <!-- Экран собеседника -->
-            <video id="remoteVideo" autoplay playsinline></video>
-            <!-- Твой экран (маленький) -->
-            <video id="localVideo" autoplay playsinline muted style="max-width: 150px; position: absolute; bottom: 20px; right: 20px; z-index: 10;"></video>
+        <div class="video-wrap">
+            <video id="remoteVideo" autoplay playsinline muted></video>
+            <video id="localVideo" autoplay playsinline muted></video>
         </div>
+
         <h3 id="roomDisplay"></h3>
+
+        <div class="row">
+            <button id="unmuteBtn" style="display: none;">Включить звук</button>
+            <button id="hangupBtn" class="secondary">Завершить</button>
+        </div>
+
         <p id="callStatus" class="status">Подключение...</p>
-        <button onclick="location.reload()">Завершить звонок</button>
-        <p class="hint">Если видео не появилось, кликните по черному экрану собеседника</p>
+        <p id="debug" class="debug"></p>
+
+        <p class="hint warning">
+            Если видео чёрное: смотри диагностическую строку ниже.
+        </p>
     </div>
 
-    <!-- Библиотека PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <script>
-        const setupScreen = document.getElementById('setupScreen');
-        const callScreen = document.getElementById('callScreen');
-        const setupStatus = document.getElementById('setupStatus');
-        const callStatus = document.getElementById('callStatus');
-        const roomCodeInput = document.getElementById('roomCode');
-        const createBtn = document.getElementById('createBtn');
-        const joinBtn = document.getElementById('joinBtn');
-        const roomDisplay = document.getElementById('roomDisplay');
-        
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
+        const PREFIX = "github-video-room-v3-";
 
-        let localStream;
-        let peer;
-        let currentCall;
+        // STUN + резервные TURN серверы для тестов.
+        // Для продакшена лучше использовать свой TURN или платный сервис.
+        const rtcConfig = {
+            iceServers: [
+                {
+                    urls: [
+                        "stun:stun.l.google.com:19302",
+                        "stun:stun1.l.google.com:19302"
+                    ]
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:80",
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:443",
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:80?transport=tcp",
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                }
+            ]
+        };
 
-        // 1. Запрашиваем камеру при загрузке
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(stream => {
-                localStream = stream;
-                localVideo.srcObject = stream;
-                localVideo.play();
-                
-                // Включаем кнопки
-                roomCodeInput.disabled = false;
-                createBtn.disabled = false;
-                joinBtn.disabled = false;
-                setupStatus.textContent = 'Камера готова. Введите код:';
-            })
-            .catch(err => {
-                setupStatus.textContent = '❌ Нет доступа к камере!';
-                console.error(err);
-            });
+        const setupScreen = document.getElementById("setupScreen");
+        const callScreen = document.getElementById("callScreen");
 
-        // Если браузер заблокировал видео, клик по нему запустит воспроизведение
-        remoteVideo.addEventListener('click', () => {
-            remoteVideo.play();
-            callStatus.textContent = 'На связи!';
-        });
+        const setupStatus = document.getElementById("setupStatus");
+        const callStatus = document.getElementById("callStatus");
+        const debugEl = document.getElementById("debug");
 
-        // 2. Функция создания комнаты (Ты - хост)
-        createBtn.addEventListener('click', () => {
-            const code = roomCodeInput.value.trim();
-            if (!code) return alert('Введите код!');
-            
-            startCall(code, true);
-        });
+        const roomCodeInput = document.getElementById("roomCode");
+        const createBtn = document.getElementById("createBtn");
+        const joinBtn = document.getElementById("joinBtn");
 
-        // 3. Функция входа в комнату (Ты - гость)
-        joinBtn.addEventListener('click', () => {
-            const code = roomCodeInput.value.trim();
-            if (!code) return alert('Введите код!');
-            
-            startCall(code, false);
-        });
+        const roomDisplay = document.getElementById("roomDisplay");
+        const unmuteBtn = document.getElementById("unmuteBtn");
+        const hangupBtn = document.getElementById("hangupBtn");
+
+        const localVideo = document.getElementById("localVideo");
+        const remoteVideo = document.getElementById("remoteVideo");
+
+        let localStream = null;
+        let peer = null;
+        let currentCall = null;
+
+        let iceState = "неизвестно";
+        let remoteTracksInfo = "Данных о дорожках собеседника пока нет.";
+
+        function renderDebug() {
+            debugEl.textContent = `ICE: ${iceState}. ${remoteTracksInfo}`;
+        }
+
+        function setCallStatus(text) {
+            callStatus.textContent = text;
+        }
+
+        function setSetupStatus(text) {
+            setupStatus.textContent = text;
+        }
+
+        function safeCode(value) {
+            return value
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9_-]+/g, "")
+                .slice(0, 32);
+        }
+
+        async function initMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+            } catch (error) {
+                console.error("Ошибка getUserMedia:", error);
+
+                // Запасной вариант: если камеру не дали, пробуем хотя бы микрофон.
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        video: false,
+                        audio: true
+                    });
+                    setSetupStatus("Камера недоступна. Будет работать только аудио.");
+                } catch (audioError) {
+                    console.error("Не получилось даже аудио:", audioError);
+                    setSetupStatus("❌ Нет доступа к камере и микрофону.");
+                    return;
+                }
+            }
+
+            localVideo.srcObject = localStream;
+
+            try {
+                await localVideo.play();
+            } catch (e) {
+                console.warn("Не удалось автоматически запустить локальное видео:", e);
+            }
+
+            roomCodeInput.disabled = false;
+            createBtn.disabled = false;
+            joinBtn.disabled = false;
+
+            const videoTracks = localStream.getVideoTracks().length;
+            const audioTracks = localStream.getAudioTracks().length;
+
+            setSetupStatus(
+                `Готово. У тебя: видео ${videoTracks}, аудио ${audioTracks}. ` +
+                `Введи код комнаты.`
+            );
+        }
 
         function startCall(code, isHost) {
-            setupScreen.style.display = 'none';
-            callScreen.style.display = 'block';
-            roomDisplay.textContent = 'Комната: ' + code;
+            if (!localStream) {
+                alert("Камера/микрофон ещё не готовы. Проверь разрешение браузера.");
+                return;
+            }
 
-            // Если хост — создаем Peer с нашим кодом. Если гость — случайный.
-            const peerId = isHost ? 'my-chat-room-' + code : undefined;
-            peer = new Peer(peerId);
+            setupScreen.style.display = "none";
+            callScreen.style.display = "block";
 
-            peer.on('open', id => {
+            roomDisplay.textContent = `Комната: ${code}`;
+            iceState = "ожидание";
+            remoteTracksInfo = "Данных о дорожках собеседника пока нет.";
+            renderDebug();
+
+            if (isHost) {
+                setCallStatus("Создаём комнату...");
+                peer = new Peer(PREFIX + code, { config: rtcConfig });
+            } else {
+                setCallStatus("Подключаемся...");
+                peer = new Peer({ config: rtcConfig });
+            }
+
+            peer.on("open", (id) => {
                 if (isHost) {
-                    callStatus.textContent = 'Ждем собеседника... Скиньте ему код: ' + code;
+                    setCallStatus(`Комната готова. Ждём собеседника. Код: ${code}`);
                 } else {
-                    callStatus.textContent = 'Звоним в комнату ' + code + '...';
-                    // Гость звонит хосту
-                    currentCall = peer.call('my-chat-room-' + code, localStream);
+                    setCallStatus(`Звоним в комнату ${code}...`);
+                    currentCall = peer.call(PREFIX + code, localStream);
                     setupCall(currentCall);
                 }
             });
 
-            // Хост ждет входящего звонка
             if (isHost) {
-                peer.on('call', call => {
-                    currentCall = call;
-                    call.answer(localStream);
-                    setupCall(call);
+                peer.on("call", (incomingCall) => {
+                    currentCall = incomingCall;
+                    incomingCall.answer(localStream);
+                    setupCall(incomingCall);
                 });
             }
 
-            // Обработка ошибок
-            peer.on('error', err => {
-                if (err.type === 'unavailable-id') {
-                    alert('Эта комната уже занята! Придумайте другой код.');
+            peer.on("error", (error) => {
+                console.error("Peer error:", error);
+
+                if (error.type === "unavailable-id") {
+                    alert("Эта комната уже занята. Попробуй другой код.");
                     location.reload();
-                } else if (err.type === 'peer-unavailable') {
-                    alert('Комната не найдена. Проверьте код.');
-                    location.reload();
+                } else if (error.type === "peer-unavailable") {
+                    setCallStatus("Комната не найдена. Проверь код.");
+                } else if (error.type === "network") {
+                    setCallStatus("Ошибка сети или сигнального сервера. Обновите страницу.");
                 } else {
-                    callStatus.textContent = 'Ошибка сети: ' + err.type;
+                    setCallStatus("Ошибка: " + (error.type || error.message || error));
                 }
+            });
+
+            peer.on("disconnected", () => {
+                setCallStatus("Отключились от сигнального сервера.");
             });
         }
 
         function setupCall(call) {
-            call.on('stream', remoteStream => {
+            currentCall = call;
+            setCallStatus("Обмен медиа...");
+            monitorCall(call);
+
+            call.on("stream", (remoteStream) => {
                 remoteVideo.srcObject = remoteStream;
-                // Принудительно пытаемся запустить видео
-                remoteVideo.play().catch(e => {
-                    callStatus.textContent = 'Браузер заблокировал видео. Кликните по нему!';
-                });
-                callStatus.textContent = 'На связи!';
+
+                // Сначала видео без звука — так браузер скорее разрешит воспроизведение.
+                remoteVideo.muted = true;
+
+                updateRemoteTracks(remoteStream);
+
+                remoteVideo.play()
+                    .then(() => {
+                        setCallStatus("Видео получено. Теперь нажми «Включить звук».");
+                        unmuteBtn.style.display = "inline-block";
+                    })
+                    .catch((error) => {
+                        console.warn("Autoplay remote video error:", error);
+                        setCallStatus("Браузер заблокировал видео. Нажми «Включить звук».");
+                        unmuteBtn.style.display = "inline-block";
+                    });
+
+                // Через пару секунд проверим, реально ли видео рисуется.
+                setTimeout(() => {
+                    if (remoteVideo.videoWidth && remoteVideo.videoHeight) {
+                        remoteTracksInfo +=
+                            ` Реальный размер видео: ${remoteVideo.videoWidth}×${remoteVideo.videoHeight}.`;
+                    } else {
+                        remoteTracksInfo +=
+                            " Видео пока 0×0. Либо видеодорожка не идёт, либо браузер её не отрисовывает.";
+                    }
+                    renderDebug();
+                }, 2500);
             });
 
-            call.on('close', () => {
-                callStatus.textContent = 'Звонок завершен.';
+            call.on("close", () => {
+                setCallStatus("Звонок завершён.");
             });
+
+            call.on("error", (error) => {
+                console.error("Call error:", error);
+                setCallStatus("Ошибка звонка: " + (error.type || error));
+            });
+        }
+
+        function updateRemoteTracks(stream) {
+            const videoTracks = stream.getVideoTracks();
+            const audioTracks = stream.getAudioTracks();
+
+            remoteTracksInfo =
+                `У собеседника получено: видео ${videoTracks.length}, аудио ${audioTracks.length}.`;
+
+            if (videoTracks.length === 0) {
+                remoteTracksInfo += " Видео с той стороны НЕ передаётся.";
+            }
+
+            if (audioTracks.length === 0) {
+                remoteTracksInfo += " Аудио с той стороны НЕ передаётся.";
+            }
+
+            videoTracks.forEach((track) => {
+                remoteTracksInfo +=
+                    ` Видео дорожка: ${track.label || "без названия"}, состояние: ${track.readyState}.`;
+
+                track.onended = () => {
+                    remoteTracksInfo += " Видео дорожка завершена.";
+                    renderDebug();
+                    setCallStatus("Похоже, собеседник выключил камеру.");
+                };
+            });
+
+            audioTracks.forEach((track) => {
+                track.onended = () => {
+                    remoteTracksInfo += " Аудио дорожка завершена.";
+                    renderDebug();
+                };
+            });
+
+            renderDebug();
+        }
+
+        function monitorCall(call) {
+            if (call._monitorStarted) return;
+            call._monitorStarted = true;
+
+            const tryMonitor = () => {
+                const pc = call.peerConnection;
+
+                if (!pc) {
+                    setTimeout(tryMonitor, 500);
+                    return;
+                }
+
+                const updateIce = () => {
+                    iceState = pc.iceConnectionState || "unknown";
+                    renderDebug();
+
+                    if (iceState === "failed") {
+                        setCallStatus(
+                            "ICE failed: сеть не пропускает медиа. " +
+                            "Попробуй мобильный интернет, отключи VPN или другой браузер."
+                        );
+                    }
+
+                    if (iceState === "disconnected") {
+                        setCallStatus("Связь нестабильна, пробуем восстановиться...");
+                    }
+                };
+
+                pc.addEventListener("iceconnectionstatechange", updateIce);
+                updateIce();
+            };
+
+            tryMonitor();
+        }
+
+        async function enableRemoteAudio() {
+            if (!remoteVideo.srcObject) {
+                alert("Поток ещё не получен.");
+                return;
+            }
+
+            remoteVideo.muted = false;
+
+            try {
+                await remoteVideo.play();
+                setCallStatus("На связи!");
+                unmuteBtn.style.display = "none";
+            } catch (error) {
+                console.error("Не удалось включить звук:", error);
+                setCallStatus("Не удалось включить звук. Нажми кнопку ещё раз.");
+            }
+        }
+
+        createBtn.addEventListener("click", () => {
+            const code = safeCode(roomCodeInput.value);
+            if (!code) {
+                alert("Введи код комнаты.");
+                return;
+            }
+            startCall(code, true);
+        });
+
+        joinBtn.addEventListener("click", () => {
+            const code = safeCode(roomCodeInput.value);
+            if (!code) {
+                alert("Введи код комнаты.");
+                return;
+            }
+            startCall(code, false);
+        });
+
+        unmuteBtn.addEventListener("click", enableRemoteAudio);
+        remoteVideo.addEventListener("click", enableRemoteAudio);
+
+        hangupBtn.addEventListener("click", () => {
+            if (currentCall) currentCall.close();
+            if (peer) peer.destroy();
+            location.reload();
+        });
+
+        // Запуск
+        if (typeof Peer === "undefined") {
+            setSetupStatus(
+                "❌ Не загрузилась библиотека PeerJS. " +
+                "Отключи AdBlock/VPN/антивирус или попробуй другой браузер."
+            );
+        } else {
+            initMedia();
         }
     </script>
 </body>
